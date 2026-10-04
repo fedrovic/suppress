@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XPLODE - Admin · Deposits</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/png" sizes="84x84" href="xlogo-thumb.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=24" />
+  </head>
+  <body class="app-body app-body-home admin-page" data-page="deposits">
+    <div class="app-shell app-shell-home">
+      <div class="home-layout admin-layout">
+        <header class="xplode-banner dashboard-header">
+          <div class="banner-topline">
+            <img class="mini-mark" src="xlogo-thumb.png" alt="XPlode" width="84" height="84" />
+          </div>
+          <div class="balance-box admin-header-actions">
+            <span class="balance-label">OPERATOR</span>
+            <strong>XPLODE ADMIN</strong>
+            <button type="button" id="adminSignOut" class="admin-tab admin-signout">Sign out</button>
+          </div>
+        </header>
+
+        <nav class="admin-nav" aria-label="Admin sections">
+          <a class="admin-tab" href="admin.html">Dashboard</a>
+          <a class="admin-tab is-active" href="admin-deposits.html">Deposits</a>
+          <a class="admin-tab" href="admin-withdrawals.html">Withdrawals</a>
+          <a class="admin-tab" href="admin-users.html">Users</a>
+          <a class="admin-tab" href="admin-sms.html">SMS log</a>
+          <a class="admin-tab" href="admin-fortune.html">Fortune</a>
+        </nav>
+
+        <main class="deposit-content admin-main">
+          <p id="adminNotice" class="form-message" aria-live="polite"></p>
+
+          <div class="transfer-history deposit-history-panel">
+            <div class="history-header">
+              <span>Deposit queue</span>
+              <button type="button" class="history-retry" data-refresh="deposits">Refresh</button>
+            </div>
+            <ul class="history-list admin-list" id="adminQueue" aria-live="polite">
+              <li><div><strong>Loading…</strong></div></li>
+            </ul>
+          </div>
+
+          <div class="transfer-history deposit-history-panel admin-sub-panel">
+            <div class="history-header"><span>Process a payment SMS</span></div>
+            <form id="smsForm" class="inline-form deposit-form deposit-form-panel">
+              <label for="smsSender">Sender (optional)</label>
+              <input id="smsSender" type="text" autocomplete="off" placeholder="e.g. MTN" />
+              <label for="smsBody">SMS text</label>
+              <textarea id="smsBody" rows="3" autocomplete="off" placeholder="Paste the full payment confirmation SMS" required></textarea>
+              <button type="submit" class="submit-btn small-btn">Process SMS</button>
+              <small>Matches a pending deposit by amount + payer number and credits it instantly.</small>
+            </form>
+            <p id="smsMessage" class="form-message" aria-live="polite"></p>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script src="xp-config.js?v=1"></script>
+    <script src="admin.js?v=13" defer></script>
+  </body>
+</html>

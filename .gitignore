@@ -1,0 +1,10 @@
+.env
+xplode.db
+xplode.db-shm
+xplode.db-wal
+node_modules/
+server.log
+*.log
+backup/
+start.bat
+.freebuff/
