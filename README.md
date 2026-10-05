@@ -4,7 +4,7 @@ A commercial animation site: user accounts, UGX wallet (deposits, withdrawals),
 squad referrals, plans, salaries, fortune codes, and a kids/cartoons video hub.
 
 - **Frontend:** static HTML/CSS/JS (no build step) served by the same Node server
-- **Backend:** Node.js + Express, SQLite (`better-sqlite3`), JWT auth, bcrypt-hashed passwords/PINs
+- **Backend:** Node.js + Express, SQLite locally and Turso in production, JWT auth
 - **Tests:** `node --test` (API integration suite)
 
 ## Run locally
@@ -34,6 +34,8 @@ health response, login cannot work yet.
 | --- | --- | --- |
 | `PORT` | no (default `3000`) | HTTP port |
 | `DB_PATH` | no (default `./xplode.db`) | SQLite database file |
+| `TURSO_DATABASE_URL` | required on Vercel | Turso database URL |
+| `TURSO_AUTH_TOKEN` | required on Vercel | Token for the Turso database |
 | `JWT_SECRET` | **yes in production** | Signs session tokens. Startup fails without it when `NODE_ENV=production`. |
 | `ADMIN_KEY` | no | Enables admin endpoints: deposit approve/reject queue and fortune codes. Sent as the `X-Admin-Key` header. |
 | `NODE_ENV` | no | Set to `production` when deploying |

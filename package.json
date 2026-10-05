@@ -6,15 +6,20 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
+    "build": "node scripts/prepare-vercel.mjs",
     "test": "node --test"
   },
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^13.0.3",
     "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^18.0.4",
     "express": "^4.21.2",
+    "express-async-errors": "^3.1.1",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2"

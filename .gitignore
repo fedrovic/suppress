@@ -3,6 +3,7 @@ xplode.db
 xplode.db-shm
 xplode.db-wal
 node_modules/
+public/
 server.log
 *.log
 backup/
