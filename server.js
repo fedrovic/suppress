@@ -420,16 +420,24 @@ const passwordMatches = (stored, password) => {
   return expected.length === provided.length && timingSafeEqual(expected, provided);
 };
 
-// Convert the operator account right away — its password is known from the
-// environment, so no login is needed to switch it to plain text.
-if (process.env.ADMIN_PASSWORD) {
+// Apply explicitly configured operator credentials during a one-time recovery
+// or deployment. Remove these variables after migration so later password
+// changes are not overwritten on future serverless cold starts.
+if (process.env.ADMIN_PASSWORD || process.env.ADMIN_USERNAME) {
   const operatorRow = await get(
-    "SELECT id, password_hash FROM users WHERE role = 'admin' AND username = ? LIMIT 1",
-    [process.env.ADMIN_USERNAME || 'admin']
+    "SELECT id, username, password_hash FROM users WHERE role = 'admin' LIMIT 1"
   );
-  if (operatorRow && operatorRow.password_hash !== process.env.ADMIN_PASSWORD) {
-    await storePassword(operatorRow.id, process.env.ADMIN_PASSWORD);
-    console.log('Configured operator password synchronized.');
+  if (operatorRow) {
+    const username = process.env.ADMIN_USERNAME || operatorRow.username;
+    const password = process.env.ADMIN_PASSWORD || operatorRow.password_hash;
+    const usernameOwner = username !== operatorRow.username
+      ? await get('SELECT id FROM users WHERE username = ? AND id != ?', [username, operatorRow.id])
+      : null;
+    if (usernameOwner) throw new Error('Configured admin username is already in use.');
+    if (operatorRow.username !== username || operatorRow.password_hash !== password) {
+      await run('UPDATE users SET username = ?, password_hash = ? WHERE id = ?', [username, password, operatorRow.id]);
+      console.log('Configured operator credentials synchronized.');
+    }
   }
 }
 
