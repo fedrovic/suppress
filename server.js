@@ -10,6 +10,7 @@ import jwt from 'jsonwebtoken';
 import { createClient } from '@libsql/client';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { normalizeFortuneAmount, normalizeFortuneCode } from './fortuneLogic.js';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -54,14 +55,34 @@ const TOON_LEVELS = {
   2: { amount: 45000, reward: 2250 },
   3: { amount: 100000, reward: 3000 }
 };
+const TOON_VIDEO_IDS = {
+  1: 'YE7VzlLtp-4',
+  2: 'eRsGyueVLvQ',
+  3: 'TLkA0RELQ1g'
+};
+const KIDS_VIDEO_URLS = {
+  1: 'https://explode.live/assets/videos/kid1.mp4',
+  2: 'https://explode.live/assets/videos/kid2.mp4',
+  3: 'https://explode.live/assets/videos/kid3.mp4',
+  4: 'https://explode.live/assets/videos/kid4.mp4',
+  5: 'https://explode.live/assets/videos/kid5.mp4',
+  6: 'https://explode.live/assets/videos/kid6.mp4'
+};
+const toonEmbedUrl = (level, origin) => {
+  const videoId = TOON_VIDEO_IDS[level];
+  if (!videoId) return null;
+  const url = new URL(`https://www.youtube-nocookie.com/embed/${videoId}`);
+  url.searchParams.set('enablejsapi', '1');
+  url.searchParams.set('origin', origin);
+  return url.toString();
+};
 
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(cors());
 // CSP: pages load no inline scripts, so external script execution is blocked.
-// Allowed externals: Google Fonts, remote kid-cartoon videos (explode.live),
-// YouTube-nocookie embeds on the cartoons page.
+// Video playback is served through this app after subscription checks.
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
@@ -71,7 +92,7 @@ app.use(helmet({
       'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       'font-src': ['https://fonts.gstatic.com'],
       'img-src': ["'self'", 'data:', 'https:'],
-      'media-src': ["'self'", 'https:'],
+      'media-src': ["'self'"],
       'frame-src': ['https://www.youtube-nocookie.com', 'https://www.youtube.com'],
       'connect-src': ["'self'"],
       'upgrade-insecure-requests': null
@@ -887,6 +908,78 @@ app.get('/api/toonhub/status', authMiddleware, async (req, res) => {
   return res.json({ success: true, levels });
 });
 
+app.post('/api/toonhub/kids-playback', authMiddleware, async (req, res) => {
+  const videoId = Number(req.body.videoId);
+  if (!KIDS_VIDEO_URLS[videoId] || !Number.isInteger(videoId)) {
+    return res.status(400).json({ success: false, message: 'Choose a valid video.' });
+  }
+  const subscription = await get(
+    "SELECT level FROM toon_subscriptions WHERE user_id = ? AND status = 'active' LIMIT 1",
+    [req.user.id]
+  );
+  if (!subscription) {
+    return res.status(403).json({ success: false, message: 'An active ToonHub subscription is required to watch videos.' });
+  }
+
+  const token = jwt.sign(
+    { userId: req.user.id, videoId, purpose: 'kids-video-playback' },
+    JWT_SECRET || DEV_JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+  return res.json({
+    success: true,
+    playbackUrl: `/api/toonhub/kids-video/${videoId}?token=${encodeURIComponent(token)}`
+  });
+});
+
+app.get('/api/toonhub/kids-video/:videoId', async (req, res) => {
+  const videoId = Number(req.params.videoId);
+  const upstreamUrl = KIDS_VIDEO_URLS[videoId];
+  if (!upstreamUrl || !Number.isInteger(videoId)) {
+    return res.status(404).json({ success: false, message: 'Video not found.' });
+  }
+
+  let playback;
+  try {
+    playback = jwt.verify(String(req.query.token || ''), JWT_SECRET || DEV_JWT_SECRET);
+  } catch {
+    return res.status(401).json({ success: false, message: 'A valid playback authorization is required.' });
+  }
+  if (playback.purpose !== 'kids-video-playback' || Number(playback.videoId) !== videoId) {
+    return res.status(403).json({ success: false, message: 'This playback authorization is not valid for the requested video.' });
+  }
+
+  const subscription = await get(
+    "SELECT level FROM toon_subscriptions WHERE user_id = ? AND status = 'active' LIMIT 1",
+    [playback.userId]
+  );
+  if (!subscription) {
+    return res.status(403).json({ success: false, message: 'An active ToonHub subscription is required to watch videos.' });
+  }
+
+  const headers = {};
+  const range = req.get('range');
+  if (range && /^bytes=\d*-\d*(?:,\s*\d*-\d*)*$/.test(range)) headers.Range = range;
+  const upstream = await fetch(upstreamUrl, { headers });
+  if (!upstream.ok && upstream.status !== 206 && upstream.status !== 416) {
+    return res.status(502).json({ success: false, message: 'Video is temporarily unavailable.' });
+  }
+
+  res.status(upstream.status);
+  res.set({
+    'Accept-Ranges': upstream.headers.get('accept-ranges') || 'bytes',
+    'Cache-Control': 'private, no-store',
+    'Content-Type': upstream.headers.get('content-type') || 'video/mp4',
+    'X-Content-Type-Options': 'nosniff'
+  });
+  for (const header of ['content-length', 'content-range']) {
+    const value = upstream.headers.get(header);
+    if (value) res.setHeader(header, value);
+  }
+  if (!upstream.body) return res.end();
+  Readable.fromWeb(upstream.body).on('error', () => res.destroy()).pipe(res);
+});
+
 app.post('/api/toonhub/watch', authMiddleware, async (req, res) => {
   const level = Number(req.body.level);
   if (!TOON_LEVELS[level] || !Number.isInteger(level)) {
@@ -918,6 +1011,7 @@ app.post('/api/toonhub/watch', authMiddleware, async (req, res) => {
   if (watch.error) return res.status(409).json({ success: false, message: watch.error });
   return res.status(watch.resume ? 200 : 201).json({
     success: true,
+    embedUrl: toonEmbedUrl(level, `${req.protocol}://${req.get('host')}`),
     message: watch.resume ? 'Resume your video to finish today’s watch.' : 'Your daily watch is ready.'
   });
 });

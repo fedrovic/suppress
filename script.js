@@ -662,9 +662,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const watchButton = card.querySelector('[data-watch-start]');
         const claimButton = card.querySelector('[data-watch-claim]');
         const depositLink = card.querySelector('.watch-deposit-link');
-        const video = card.querySelector('iframe[data-video-src]');
+        const video = card.querySelector('iframe[data-video-player]');
         const lockOverlay = card.querySelector('.watch-lock-overlay');
         const watchStartedHere = video?.dataset.started === 'true';
+
+        if (!active && video && video.src !== 'about:blank') {
+          video.src = 'about:blank';
+          video.dataset.started = 'false';
+          video.dataset.playerInitialized = 'false';
+        }
 
         card.classList.toggle('is-locked', !active);
         if (lockOverlay) {
@@ -731,10 +737,11 @@ document.addEventListener('DOMContentLoaded', () => {
             method: 'POST',
             body: JSON.stringify({ level })
           });
-          const video = card.querySelector('iframe[data-video-src]');
+          const video = card.querySelector('iframe[data-video-player]');
           if (video) {
+            if (!result.embedUrl) throw new Error('The authorized video is unavailable.');
             video.dataset.started = 'true';
-            video.src = video.dataset.videoSrc;
+            video.src = result.embedUrl;
             initializeWatchPlayer(card, level);
           }
           if (note) note.textContent = result.message;
@@ -751,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const initializeWatchPlayer = (card, level) => {
-      const video = card.querySelector('iframe[data-video-src]');
+      const video = card.querySelector('iframe[data-video-player]');
       if (!video || !window.YT?.Player || video.dataset.playerInitialized === 'true') return;
       video.dataset.playerInitialized = 'true';
       new window.YT.Player(video, {
@@ -779,7 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.onYouTubeIframeAPIReady = () => {
       previousYoutubeReady?.();
       toonCards.forEach((card) => {
-        if (card.querySelector('iframe[data-video-src]')?.dataset.started === 'true') {
+        if (card.querySelector('iframe[data-video-player]')?.dataset.started === 'true') {
           initializeWatchPlayer(card, Number(card.dataset.watchLevel));
         }
       });
@@ -1508,19 +1515,39 @@ document.addEventListener('DOMContentLoaded', () => {
       video.addEventListener('error', () => {
         if (requestedVideo === video) {
           requestedVideo = null;
+          video.dataset.playbackAuthorized = 'false';
           setVideoStatus('VIDEO UNAVAILABLE');
         }
       });
 
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         selectedVideoIndex = index;
         if (video.paused) {
           requestedVideo = video;
           setVideoStatus('LOADING');
-          video.play().catch(() => {
+          if (video.dataset.playbackAuthorized === 'true') {
+            video.play().catch(() => {
+              if (requestedVideo === video) requestedVideo = null;
+              setVideoStatus('TAP TO PLAY');
+            });
+            return;
+          }
+          button.disabled = true;
+          try {
+            const grant = await apiRequest('/api/toonhub/kids-playback', {
+              method: 'POST',
+              body: JSON.stringify({ videoId: Number(video.dataset.videoId) })
+            });
+            video.src = grant.playbackUrl;
+            video.dataset.playbackAuthorized = 'true';
+            video.load();
+            await video.play();
+          } catch (error) {
             if (requestedVideo === video) requestedVideo = null;
-            setVideoStatus('TAP TO PLAY');
-          });
+            setVideoStatus(error.message || 'VIDEO LOCKED');
+          } finally {
+            button.disabled = false;
+          }
         } else {
           if (requestedVideo === video) requestedVideo = null;
           video.pause();
