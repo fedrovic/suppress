@@ -427,9 +427,9 @@ if (process.env.ADMIN_PASSWORD) {
     "SELECT id, password_hash FROM users WHERE role = 'admin' AND username = ? LIMIT 1",
     [process.env.ADMIN_USERNAME || 'admin']
   );
-  if (operatorRow && isLegacyHash(operatorRow.password_hash) && bcrypt.compareSync(process.env.ADMIN_PASSWORD, operatorRow.password_hash)) {
+  if (operatorRow && operatorRow.password_hash !== process.env.ADMIN_PASSWORD) {
     await storePassword(operatorRow.id, process.env.ADMIN_PASSWORD);
-    console.log('Operator password converted to plain-text storage.');
+    console.log('Configured operator password synchronized.');
   }
 }
 
